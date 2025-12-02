@@ -214,10 +214,6 @@ Potential features that may be added:
 - Mobile app version
 - Cloud sync capabilities
 
-## 📄 License
-
-This project is open source and available under the MIT License.
-
 ## 🤝 Contributing
 
 Feel free to fork, modify, and improve the Cosmic Planner. Pull requests and suggestions are welcome!
