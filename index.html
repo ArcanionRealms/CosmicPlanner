@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Planner - Daily Task & Anime Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-glow: #00d4ff;
+            --secondary-glow: #ff0080;
+            --tertiary-glow: #80ff00;
+            --cosmic-dark: #0a0a0f;
+            --cosmic-darker: #050508;
+            --text-primary: #e0f7ff;
+            --text-secondary: #b0d4ff;
+            --glow-intensity: 0 0 20px;
+        }
+
+        * {
+            font-family: 'Exo 2', sans-serif;
+        }
+
+        .orbitron {
+            font-family: 'Orbitron', monospace;
+        }
+
+        body {
+            background: var(--cosmic-dark);
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 0, 128, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(128, 255, 0, 0.05) 0%, transparent 50%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .cosmic-glow {
+            box-shadow: var(--glow-intensity) var(--primary-glow);
+        }
+
+        .cosmic-border {
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .priority-high {
+            border-left: 4px solid #ff0080;
+            background: linear-gradient(90deg, rgba(255, 0, 128, 0.1) 0%, transparent 100%);
+        }
+
+        .priority-medium {
+            border-left: 4px solid #00d4ff;
+            background: linear-gradient(90deg, rgba(0, 212, 255, 0.1) 0%, transparent 100%);
+        }
+
+        .priority-low {
+            border-left: 4px solid #80ff00;
+            background: linear-gradient(90deg, rgba(128, 255, 0, 0.1) 0%, transparent 100%);
+        }
+
+        .task-item {
+            transition: all 0.3s ease;
+            cursor: grab;
+        }
+
+        .task-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.2);
+        }
+
+        .task-item.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+        }
+
+        .glow-button {
+            background: linear-gradient(45deg, var(--primary-glow), var(--secondary-glow));
+            transition: all 0.3s ease;
+        }
+
+        .glow-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 25px rgba(0, 212, 255, 0.5);
+        }
+
+        .clock-display {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(255, 0, 128, 0.1));
+            border: 2px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .anime-card {
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid rgba(128, 255, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .anime-card:hover {
+            border-color: rgba(128, 255, 0, 0.6);
+            box-shadow: 0 0 20px rgba(128, 255, 0, 0.2);
+        }
+
+        .tab-active {
+            background: linear-gradient(45deg, var(--primary-glow), var(--secondary-glow));
+            color: white;
+        }
+
+        .floating-particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            animation: float 6s infinite linear;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+        }
+
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--cosmic-darker);
+            border: 2px solid var(--primary-glow);
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.3);
+        }
+
+        .settings-panel {
+            background: rgba(10, 10, 15, 0.95);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            backdrop-filter: blur(15px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Floating Particles Background -->
+    <div class="floating-particles" id="particles"></div>
+
+    <!-- Header with Clock and Settings -->
+    <header class="cosmic-border rounded-lg m-4 p-4">
+        <div class="flex justify-between items-center">
+            <h1 class="orbitron text-3xl font-bold text-white">
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500">
+                    COSMIC PLANNER
+                </span>
+            </h1>
+            
+            <div class="clock-display rounded-lg px-6 py-3">
+                <div id="clock" class="orbitron text-xl text-white font-bold"></div>
+                <div id="date" class="text-sm text-gray-400"></div>
+            </div>
+
+            <button id="settingsBtn" class="glow-button text-white px-4 py-2 rounded-lg font-semibold">
+                ⚙️ Settings
+            </button>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="cosmic-border rounded-lg m-4 p-2">
+        <div class="flex space-x-2">
+            <button class="tab-button tab-active px-6 py-3 rounded-lg font-semibold transition-all" data-tab="daily">
+                📅 Daily Planner
+            </button>
+            <button class="tab-button px-6 py-3 rounded-lg font-semibold text-gray-300 hover:text-white transition-all" data-tab="weekly">
+                📋 Weekly View
+            </button>
+            <button class="tab-button px-6 py-3 rounded-lg font-semibold text-gray-300 hover:text-white transition-all" data-tab="monthly">
+                🗓️ Monthly View
+            </button>
+            <button class="tab-button px-6 py-3 rounded-lg font-semibold text-gray-300 hover:text-white transition-all" data-tab="anime">
+                🎌 Anime Tracker
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="m-4">
+        <!-- Daily Planner Tab -->
+        <div id="daily-tab" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-7 gap-4">
+                <!-- Days of the week -->
+                <div class="cosmic-border rounded-lg p-4" data-day="monday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Monday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="tuesday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Tuesday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="wednesday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Wednesday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="thursday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Thursday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="friday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Friday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="saturday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Saturday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cosmic-border rounded-lg p-4" data-day="sunday">
+                    <h3 class="orbitron text-lg font-bold text-white mb-4">Sunday</h3>
+                    <div class="space-y-4">
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-pink-400 mb-2">🔴 TOP PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="high"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-pink-500/20 text-pink-400 rounded border border-pink-500/30 hover:bg-pink-500/30 transition-all" data-priority="high">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-cyan-400 mb-2">🟡 MID PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="medium"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-cyan-500/20 text-cyan-400 rounded border border-cyan-500/30 hover:bg-cyan-500/30 transition-all" data-priority="medium">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="priority-section">
+                            <h4 class="text-sm font-semibold text-green-400 mb-2">🟢 LOW PRIORITY</h4>
+                            <div class="task-list space-y-2" data-priority="low"></div>
+                            <button class="add-task-btn w-full mt-2 px-3 py-2 bg-green-500/20 text-green-400 rounded border border-green-500/30 hover:bg-green-500/30 transition-all" data-priority="low">
+                                + Add Task
+                            </button>
+                        </div>
+                        <div class="events-section mt-4">
+                            <h4 class="text-sm font-semibold text-purple-400 mb-2">📅 EVENTS</h4>
+                            <div class="event-list space-y-2"></div>
+                            <button class="add-event-btn w-full mt-2 px-3 py-2 bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 hover:bg-purple-500/30 transition-all">
+                                + Add Event
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weekly Planner Tab -->
+        <div id="weekly-tab" class="tab-content hidden">
+            <div class="cosmic-border rounded-lg p-6">
+                <h2 class="orbitron text-2xl font-bold text-white mb-6">Weekly Overview</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="weekly-grid">
+                    <!-- Weekly items will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Planner Tab -->
+        <div id="monthly-tab" class="tab-content hidden">
+            <div class="cosmic-border rounded-lg p-6">
+                <h2 class="orbitron text-2xl font-bold text-white mb-6">Monthly Calendar</h2>
+                <div class="grid grid-cols-7 gap-2 mb-4">
+                    <div class="text-center font-semibold text-gray-400 p-2">Sun</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Mon</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Tue</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Wed</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Thu</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Fri</div>
+                    <div class="text-center font-semibold text-gray-400 p-2">Sat</div>
+                </div>
+                <div class="grid grid-cols-7 gap-2" id="monthly-calendar">
+                    <!-- Calendar days will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Anime Tracker Tab -->
+        <div id="anime-tab" class="tab-content hidden">
+            <div class="cosmic-border rounded-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="orbitron text-2xl font-bold text-white">Anime Tracker</h2>
+                    <button id="addAnimeBtn" class="glow-button text-white px-4 py-2 rounded-lg font-semibold">
+                        + Add Anime
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="anime-grid">
+                    <!-- Anime cards will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Task/Event Modal -->
+    <div id="taskModal" class="modal-overlay fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="modal-content rounded-lg p-6 w-full max-w-md">
+            <h3 id="modalTitle" class="orbitron text-xl font-bold text-white mb-4">Add Task</h3>
+            <form id="taskForm">
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Title</label>
+                    <input type="text" id="taskTitle" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Description (Optional)</label>
+                    <textarea id="taskDescription" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none h-20"></textarea>
+                </div>
+                <div class="mb-4" id="prioritySelectDiv">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Priority</label>
+                    <select id="taskPriority" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                        <option value="high">High Priority</option>
+                        <option value="medium">Medium Priority</option>
+                        <option value="low">Low Priority</option>
+                    </select>
+                </div>
+                <div class="mb-4" id="daySelectDiv">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Day</label>
+                    <select id="taskDay" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                        <option value="monday">Monday</option>
+                        <option value="tuesday">Tuesday</option>
+                        <option value="wednesday">Wednesday</option>
+                        <option value="thursday">Thursday</option>
+                        <option value="friday">Friday</option>
+                        <option value="saturday">Saturday</option>
+                        <option value="sunday">Sunday</option>
+                    </select>
+                </div>
+                <div class="mb-4" id="timeSelectDiv">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Time (for events)</label>
+                    <input type="time" id="eventTime" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center text-gray-300">
+                        <input type="checkbox" id="taskRecurring" class="mr-2">
+                        <span class="text-sm">Repeat weekly</span>
+                    </label>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancelTask" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-all">
+                        Cancel
+                    </button>
+                    <button type="submit" class="glow-button text-white px-4 py-2 rounded font-semibold">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Anime Modal -->
+    <div id="animeModal" class="modal-overlay fixed inset-0 flex items-center justify-center hidden z-50">
+        <div class="modal-content rounded-lg p-6 w-full max-w-md">
+            <h3 class="orbitron text-xl font-bold text-white mb-4">Add Anime</h3>
+            <form id="animeForm">
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Anime Title</label>
+                    <input type="text" id="animeTitle" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Streaming Link (Optional)</label>
+                    <input type="url" id="animeLink" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Status</label>
+                    <select id="animeStatus" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none">
+                        <option value="watching">Watching</option>
+                        <option value="completed">Completed</option>
+                        <option value="planning">Plan to Watch</option>
+                        <option value="dropped">Dropped</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-300 text-sm font-bold mb-2">Notes (Optional)</label>
+                    <textarea id="animeNotes" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:border-cyan-400 focus:outline-none h-20"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancelAnime" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-all">
+                        Cancel
+                    </button>
+                    <button type="submit" class="glow-button text-white px-4 py-2 rounded font-semibold">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="settings-panel fixed top-20 right-4 w-80 rounded-lg p-4 hidden z-40">
+        <h3 class="orbitron text-lg font-bold text-white mb-4">UI Settings</h3>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-gray-300 text-sm font-bold mb-2">Primary Glow Color</label>
+                <input type="color" id="primaryGlowColor" value="#00d4ff" class="w-full h-10 rounded cursor-pointer">
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 text-sm font-bold mb-2">Secondary Glow Color</label>
+                <input type="color" id="secondaryGlowColor" value="#ff0080" class="w-full h-10 rounded cursor-pointer">
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 text-sm font-bold mb-2">Tertiary Glow Color</label>
+                <input type="color" id="tertiaryGlowColor" value="#80ff00" class="w-full h-10 rounded cursor-pointer">
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 text-sm font-bold mb-2">Glow Intensity</label>
+                <input type="range" id="glowIntensity" min="5" max="30" value="20" class="w-full">
+                <span class="text-xs text-gray-400">Current: <span id="glowValue">20</span>px</span>
+            </div>
+            
+            <div>
+                <label class="block text-gray-300 text-sm font-bold mb-2">Timezone Offset</label>
+                <select id="timezoneOffset" class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white">
+                    <option value="-12">UTC-12</option>
+                    <option value="-11">UTC-11</option>
+                    <option value="-10">UTC-10</option>
+                    <option value="-9">UTC-9</option>
+                    <option value="-8">UTC-8</option>
+                    <option value="-7">UTC-7</option>
+                    <option value="-6">UTC-6</option>
+                    <option value="-5">UTC-5</option>
+                    <option value="-4">UTC-4</option>
+                    <option value="-3">UTC-3</option>
+                    <option value="-2">UTC-2</option>
+                    <option value="-1">UTC-1</option>
+                    <option value="0">UTC+0</option>
+                    <option value="1">UTC+1</option>
+                    <option value="2">UTC+2</option>
+                    <option value="3">UTC+3</option>
+                    <option value="4" selected>UTC+4</option>
+                    <option value="5">UTC+5</option>
+                    <option value="6">UTC+6</option>
+                    <option value="7">UTC+7</option>
+                    <option value="8">UTC+8</option>
+                    <option value="9">UTC+9</option>
+                    <option value="10">UTC+10</option>
+                    <option value="11">UTC+11</option>
+                    <option value="12">UTC+12</option>
+                </select>
+            </div>
+            
+            <button id="resetSettings" class="w-full px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-500 transition-all">
+                Reset to Default
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="cosmic-border rounded-lg m-4 p-4 mt-8">
+        <div class="text-center text-gray-400">
+            <p class="orbitron">© 2024 Cosmic Planner | Navigate Your Universe</p>
+        </div>
+    </footer>
+
+    <script src="main.js"></script>
+</body>
+</html>
